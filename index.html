@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Symptom Checker (School Project)</title>
+
+  <style>
+    /* Simple styling so it looks clean for a school project */
+    body { font-family: Arial, sans-serif; margin: 24px; }
+    .box { max-width: 780px; }
+    .symptoms { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; max-width: 780px; }
+    .symptom { display: flex; align-items: center; gap: 8px; padding: 8px 10px; margin: 0; break-inside: avoid; border: 1px solid #eee; border-radius: 8px; background: #fafafa; }
+    .symptom:hover { background: #f4f7fb; border-color: #e0e6ef; }
+    .symptomText { flex: 1; }
+    input[type="checkbox"] { width: 18px; height: 18px; flex: 0 0 18px; margin: 0; }
+    button { padding: 10px 14px; margin-top: 12px; cursor: pointer; }
+    .pill { display:inline-block; padding:6px 10px; margin:4px; border:1px solid #ccc; border-radius:999px; }
+    table { border-collapse: collapse; width: 100%; margin-top: 14px; }
+    th, td { border: 1px solid #ddd; padding: 10px; }
+    th { background: #f3f3f3; text-align:left; }
+    .disclaimer { margin-top: 16px; color: #444; }
+    .hidden { display: none; }
+    @media (max-width: 700px) { .symptoms { grid-template-columns: 1fr; } }
+  </style>
+</head>
+
+<body>
+  <div class="box">
+    <h1>Symptom Checker (School Project)</h1>
+
+    <!-- Quick explanation for the user -->
+    <p>
+      Check the symptoms that apply to you, then click <b>Submit</b>.
+      This program finds possible matches based on symptom overlap.
+    </p>
+
+    <!-- Symptoms will be generated here by JavaScript -->
+    <div id="symptomList" class="symptoms"></div>
+
+    <!-- Buttons -->
+    <button id="submitBtn">Submit</button>
+    <button id="clearBtn" type="button">Clear All</button>
+
+    <!-- Results section -->
+    <div id="resultsSection" class="hidden">
+      <h2>Results</h2>
+
+      <h3>Selected Symptoms:</h3>
+      <div id="chosenSymptoms"></div>
+
+      <h3>Matches:</h3>
+      <div id="matchesArea"></div>
+
+      <h3>Best Match(es):</h3>
+      <ul id="bestMatches"></ul>
+
+      <h3>Treatment Steps:</h3>
+      <div id="treatmentSection"></div>
+    </div>
+
+    <!-- Disclaimer -->
+    <div class="disclaimer">
+      <b>Disclaimer:</b> This is for an educational project only and is not medical advice.
+    </div>
+  </div>
+
+  <script>
+    // Simple, easy-to-read script. Keeps the same features:
+    // - builds checkboxes from a list of symptoms
+    // - scores illnesses by matching symptoms
+    // - shows matches, best matches, and treatment steps
+
+    const SYMPTOMS = [
+      "Fever","Cough","Sore throat","Runny or stuffy nose",
+      "Sneezing","Shortness of breath","Chest pain","Fatigue",
+      "Headache","Body aches","Nausea","Vomiting","Diarrhea",
+      "Stomach pain","Loss of appetite","Dizziness","Rash",
+      "Itchy or watery eyes","Loss of taste or smell","Chills"
+    ];
+
+    const ILLNESSES = {
+      "Common Cold": ["Cough","Sore throat","Runny or stuffy nose","Sneezing","Fatigue","Headache"],
+      "Flu": ["Fever","Chills","Body aches","Fatigue","Cough","Headache"],
+      "Allergies": ["Sneezing","Runny or stuffy nose","Itchy or watery eyes","Sore throat"],
+      "Stomach Bug": ["Nausea","Vomiting","Diarrhea","Stomach pain","Loss of appetite","Fever"],
+      "COVID-like Illness": ["Fever","Cough","Fatigue","Loss of taste or smell","Shortness of breath","Headache"]
+    };
+
+    const TREATMENTS = {
+      "Common Cold": ["Rest and sleep","Drink fluids","OTC pain relievers","Saline nasal drops","See provider if worse"],
+      "Flu": ["Stay home and rest","Hydrate","Talk to provider about antivirals if high-risk","Seek care for breathing problems"],
+      "Allergies": ["Avoid triggers","OTC antihistamines","Nasal rinses or sprays","See an allergist if needed"],
+      "Stomach Bug": ["Stay hydrated","Start with bland foods","Rest","Seek care for dehydration"],
+      "COVID-like Illness": ["Isolate","Test if available","Rest and hydrate","Seek urgent care for severe symptoms"]
+    };
+
+    // DOM refs
+    const symptomListDiv = document.getElementById("symptomList");
+    const resultsSection = document.getElementById("resultsSection");
+    const chosenSymptomsDiv = document.getElementById("chosenSymptoms");
+    const matchesAreaDiv = document.getElementById("matchesArea");
+    const bestMatchesUl = document.getElementById("bestMatches");
+    const treatmentSectionDiv = document.getElementById("treatmentSection");
+    const submitBtn = document.getElementById("submitBtn");
+    const clearBtn = document.getElementById("clearBtn");
+
+    // build checkboxes
+    function buildCheckboxes() {
+      symptomListDiv.innerHTML = "";
+      for (let i = 0; i < SYMPTOMS.length; i++) {
+        const label = document.createElement('label');
+        label.className = 'symptom';
+        const cb = document.createElement('input');
+        cb.type = 'checkbox'; cb.value = SYMPTOMS[i]; cb.id = 'symptom_' + i;
+        const span = document.createElement('span'); span.className = 'symptomText'; span.textContent = SYMPTOMS[i];
+        label.appendChild(cb); label.appendChild(span); symptomListDiv.appendChild(label);
+      }
+    }
+
+    function getChosenSymptoms() {
+      const chosen = [];
+      const boxes = symptomListDiv.querySelectorAll("input[type='checkbox']");
+      boxes.forEach(b => { if (b.checked) chosen.push(b.value); });
+      return chosen;
+    }
+
+    function scoreIllnesses(chosen) {
+      const results = []; let bestScore = 0; let bestList = [];
+      for (const name in ILLNESSES) {
+        const symptoms = ILLNESSES[name];
+        let match = 0; chosen.forEach(c => { if (symptoms.indexOf(c) !== -1) match++; });
+        if (match > 0) results.push({ name, matchCount: match, total: symptoms.length, percent: Math.round((match / symptoms.length) * 1000) / 10 });
+        if (match > bestScore) { bestScore = match; bestList = [name]; }
+        else if (match === bestScore && match !== 0) bestList.push(name);
+      }
+      results.sort((a, b) => b.matchCount - a.matchCount || b.percent - a.percent);
+      return { results, bestList };
+    }
+
+    function showResults(chosen, results, bestList) {
+      resultsSection.classList.remove('hidden');
+      chosenSymptomsDiv.innerHTML = '';
+      chosen.forEach(s => { const span = document.createElement('span'); span.className = 'pill'; span.textContent = s; chosenSymptomsDiv.appendChild(span); });
+
+      if (results.length === 0) matchesAreaDiv.innerHTML = '<p>No matches found in the illness list.</p>';
+      else {
+        let html = '<table><tr><th>Illness</th><th>Matches</th><th>Percent</th></tr>';
+        results.forEach(r => { html += `<tr><td>${r.name}</td><td>${r.matchCount}/${r.total}</td><td>${r.percent}%</td></tr>`; });
+        html += '</table>'; matchesAreaDiv.innerHTML = html;
+      }
+
+      bestMatchesUl.innerHTML = '';
+      if (bestList.length === 0) { const li = document.createElement('li'); li.textContent = 'No best match found.'; bestMatchesUl.appendChild(li); }
+      else bestList.forEach(n => { const li = document.createElement('li'); li.textContent = n; bestMatchesUl.appendChild(li); });
+
+      treatmentSectionDiv.innerHTML = '';
+      if (bestList.length === 0) treatmentSectionDiv.innerHTML = '<p>No treatment guidance available.</p>';
+      else {
+        bestList.forEach(n => {
+          const h = document.createElement('h4'); h.textContent = n; const ol = document.createElement('ol');
+          const steps = TREATMENTS[n] || ['No specific guidance available. Consult a healthcare provider.'];
+          steps.forEach(s => { const li = document.createElement('li'); li.textContent = s; ol.appendChild(li); });
+          treatmentSectionDiv.appendChild(h); treatmentSectionDiv.appendChild(ol);
+        });
+      }
+    }
+
+    submitBtn.addEventListener('click', () => {
+      const chosen = getChosenSymptoms(); if (chosen.length === 0) { alert('Please select at least one symptom.'); return; }
+      const scored = scoreIllnesses(chosen); showResults(chosen, scored.results, scored.bestList); resultsSection.scrollIntoView({ behavior: 'smooth' });
+    });
+
+    clearBtn.addEventListener('click', () => {
+      const boxes = symptomListDiv.querySelectorAll("input[type='checkbox']"); boxes.forEach(b => b.checked = false);
+      resultsSection.classList.add('hidden'); chosenSymptomsDiv.innerHTML = ''; matchesAreaDiv.innerHTML = ''; bestMatchesUl.innerHTML = ''; treatmentSectionDiv.innerHTML = '';
+    });
+
+    buildCheckboxes();
+  </script>
+</body>
+</html>
